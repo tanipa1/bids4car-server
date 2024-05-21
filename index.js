@@ -4,6 +4,7 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
+const axios = require("axios");
 
 // middlewear
 app.use(cors());
@@ -27,6 +28,7 @@ async function run() {
 
     /* Database and Collections:  */
     const userCollection = client.db("Bids4Car").collection("users");
+    const rateCollection = client.db("Bids4Car").collection("rates");
     const ridesharersCollection = client
       .db("Bids4Car")
       .collection("ridesharers");
@@ -70,36 +72,117 @@ async function run() {
       const result = await ridesharersCollection.insertOne(ridesharers);
       res.send(result);
     });
- 
+
     // Ridesharers Data Get
     app.get("/ridesharers", async (req, res) => {
       const result = await ridesharersCollection.find().toArray();
       res.send(result);
     });
 
-     // Delete Specific shops
-     app.delete('/ridesharers/:id', async (req, res) => {
+    // Delete Specific shops
+    app.delete("/ridesharers/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) }
+      const query = { _id: new ObjectId(id) };
       const result = await ridesharersCollection.deleteOne(query);
       res.send(result);
-  });
+    });
 
-  // Approve the shops
-  app.patch('/ridesharers/:id', async (req, res) => {
+    // Approve the shops
+    app.patch("/ridesharers/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const ridesharers = req.body;
       const updateDoc = {
-          $set: {
-              status: true
-          },
+        $set: {
+          status: true,
+        },
       };
       const result = await ridesharersCollection.updateOne(filter, updateDoc);
       res.send(result);
-  })
+    });
 
-/* ==================== END ==================== */
+    /* ==================== Map ==================== */
+    app.post("/calculate-distance", async (req, res) => {
+      const { pickup, destination } = req.body;
+
+      // Use OpenStreetMap Nominatim API to get coordinates for pickup and destination
+      const [pickupCoords, destCoords] = await Promise.all([
+        axios.get(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+            pickup
+          )}&format=json`
+        ),
+        axios.get(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+            destination
+          )}&format=json`
+        ),
+      ]);
+
+      // Extract latitude and longitude from the response
+      const pickupLngLat = [
+        parseFloat(pickupCoords.data[0].lat),
+        parseFloat(pickupCoords.data[0].lon),
+      ];
+      const destLngLat = [
+        parseFloat(destCoords.data[0].lat),
+        parseFloat(destCoords.data[0].lon),
+      ];
+
+      // Calculate distance using Haversine formula
+      const distance = calculateDistance(
+        pickupLngLat[0],
+        pickupLngLat[1],
+        destLngLat[0],
+        destLngLat[1]
+      );
+
+      res.json({ distance });
+    });
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Radius of the earth in km
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) *
+          Math.cos(deg2rad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c; // Distance in km
+      return distance;
+    }
+
+    /* ==================== Set Rent ==================== */
+    // Add a Rate
+    app.post("/rates", async (req, res) => {
+      const rates = req.body;
+      const query = { carType: rates.carType };
+      const exitingRate = await rateCollection.findOne(query);
+      if (exitingRate) {
+        return res.send({ message: "rate already exists" });
+      }
+      const result = await rateCollection.insertOne(rates);
+      res.send(result);
+    });
+
+    // Update Rate
+    app.patch("/rates/:carType", async (req, res) => {
+      const rates = req.body;
+      const carType = req.params.carType;
+      const filter = { carType: carType };
+      const updateDoc = {
+        $set: {
+          rent: rates.rent,
+        },
+      };
+      const result = await rateCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
+    /* ==================== END ==================== */
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
