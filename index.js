@@ -182,6 +182,12 @@ async function run() {
       res.send(result);
     });
 
+    // rates Data Get
+    app.get("/rates", async (req, res) => {
+      const result = await rateCollection.find().toArray();
+      res.send(result);
+    });
+
     /* ==================== END ==================== */
 
     // Send a ping to confirm a successful connection
