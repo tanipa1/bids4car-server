@@ -29,6 +29,9 @@ async function run() {
     /* Database and Collections:  */
     const userCollection = client.db("Bids4Car").collection("users");
     const rateCollection = client.db("Bids4Car").collection("rates");
+    const rideRequestCollection = client
+      .db("Bids4Car")
+      .collection("rideRequests");
     const ridesharersCollection = client
       .db("Bids4Car")
       .collection("ridesharers");
@@ -79,7 +82,7 @@ async function run() {
       res.send(result);
     });
 
-    // Delete Specific shops
+    // Delete Specific Ridesharer
     app.delete("/ridesharers/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -87,7 +90,7 @@ async function run() {
       res.send(result);
     });
 
-    // Approve the shops
+    // Approve the Ridesharer
     app.patch("/ridesharers/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -95,6 +98,20 @@ async function run() {
       const updateDoc = {
         $set: {
           status: true,
+        },
+      };
+      const result = await ridesharersCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
+    // Activity of Ridesharer
+    app.patch("/ridesharers/activity/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const ridesharers = req.body;
+      const updateDoc = {
+        $set: {
+          activity: ridesharers.activity,
         },
       };
       const result = await ridesharersCollection.updateOne(filter, updateDoc);
@@ -185,6 +202,36 @@ async function run() {
     // rates Data Get
     app.get("/rates", async (req, res) => {
       const result = await rateCollection.find().toArray();
+      res.send(result);
+    });
+
+    /* ==================== Ride Requests ==================== */
+    // Add a Request
+    app.post("/rideRequests", async (req, res) => {
+      const rideRequests = req.body;
+      const result = await rideRequestCollection.insertOne(rideRequests);
+      res.send(result);
+    });
+
+    // Requests Data Get
+    app.get("/rideRequests", async (req, res) => {
+      const result = await rideRequestCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Accept the Ride Requests
+    app.patch("/rideRequests/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateRequests = req.body;
+      const updateDoc = {
+        $set: {
+          status: "Accepted",
+          Accepted_by: updateRequests.Accepted_by,
+          rideSharer_contact: updateRequests.rideSharer_contact
+        },
+      };
+      const result = await rideRequestCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
 
